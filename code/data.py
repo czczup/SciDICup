@@ -1,7 +1,5 @@
 import pandas as pd
-import matplotlib.pyplot as plt
 import numpy as np
-import random
 from numpy.lib.stride_tricks import as_strided
 import os
 import random
@@ -57,18 +55,6 @@ def crop_data(data):
     return background, cropped_data
 
 
-def draw_background(data):
-    x = list(range(len(data)))
-    y = data
-    p = plt.figure(figsize=(20, 3), dpi=100)
-    plt.xlabel('index')
-    plt.ylabel('magnorm')
-    plt.title("background")
-    plt.xlim(0, len(data))
-    plt.scatter(x, y, s=1, marker='o')
-    plt.show()
-
-
 def pool2d(A, kernel_size, stride, padding):
     A = np.reshape(A.tolist(), [A.shape[0], 1])
     A = np.pad(A, padding, mode='constant')
@@ -102,8 +88,10 @@ def get_all_filename():
 
 def load_all_data():
     data = np.load("../dataset/data.npy")
-    data = [item for item in data]
-    return data
+    data = [np.array(item) for item in data]
+    pathes = np.load("../dataset/pathes.npy")
+    pathes = [np.array(item) for item in pathes]
+    return data, pathes
 
 
 flare_stars, microlensings = get_train_filename()
@@ -137,21 +125,14 @@ def data_augmentation(data):
     return data_
 
 
-def generate_background():
-    data_ = []
-    for i in range(108000):
-        start = random.randint(0, len(background_all)-400)
-        data_.append(background_all[start: start+400])
-    return data_
-
-
 def generate_class0(num=108000):
     class0 = []
     for i in tqdm(range(num//54)):
         flare_stars_aug = data_augmentation(flare_stars_)
         microlensings_aug = data_augmentation(microlensings_) + data_augmentation(microlensings_) + data_augmentation(microlensings_)
         class0.extend(flare_stars_aug + microlensings_aug)
-    return np.array(class0)
+    class0 = [np.array(item) for item in class0]
+    return class0
 
 
 def generate_class1(all_data, num=108000):
@@ -166,7 +147,8 @@ def generate_class1(all_data, num=108000):
     class1 = []
     for file in tqdm(files):
         class1 += crop_data(file)
-    return np.array(class1)
+    class1 = [np.array(item) for item in class1]
+    return class1
 
 
 if __name__ == '__main__':

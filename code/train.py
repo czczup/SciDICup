@@ -13,8 +13,7 @@ def train(x, y, sess, model, saver, writer, dirId, train_step=100):
         print('[step %d]: loss: %.6f, time: %.3fs, acc: %.3f'%(step, loss_, (time.time() - time1), acc_train))
         writer.add_summary(summary, step)
 
-        if step % 50 == 0:
-            print("Save the model Successfully")
-            saver.save(sess, "models/" + dirId + "/model.ckpt", global_step=step)
+    print("Save the model Successfully")
+    saver.save(sess, "models/" + dirId + "/model.ckpt", global_step=step)
 
 
