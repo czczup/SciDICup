@@ -81,16 +81,30 @@ def get_all_filename():
     files = []
     for dir_ in dirs:
         filenames = os.listdir("../dataset/AstroSet-v0.1/AstroSet/" + dir_)
-        filenames = ["../dataset/AstroSet-v0.1/AstroSet/" + dir_ + "/" + filename for filename in filenames]
+        filenames = ["../dataset/AstroSet-v0.1/AstroSet/" + dir_ + "/" + filename for filename in filenames if filename != 'abstract']
         files += filenames
     return files
+
+def average(x):
+    width = x.shape[0]
+    x_move1 = x.reshape([width, 1])
+    ones_5 = np.ones((5,)) / 5
+    ones_10 = np.ones((10,)) / 10
+    ones_20 = np.ones((20,)) / 20
+    x_move5 = np.convolve(x, ones_5, mode="same").astype(np.float32).reshape([width, 1])
+    x_move10 = np.convolve(x, ones_10, mode="same").astype(np.float32).reshape([width, 1])
+    x_move20 = np.convolve(x, ones_20, mode="same").astype(np.float32).reshape([width, 1])
+    x_output = np.stack([x_move1, x_move5, x_move10, x_move20], axis=-1)
+    del x_move1, x_move5, x_move10, x_move20
+    return x_output
 
 
 def load_all_data():
     data = np.load("../dataset/data.npy")
-    data = [np.array(item) for item in data]
+    data = [item.reshape([item.shape[0], 1, 1]) for item in data]
     pathes = np.load("../dataset/pathes.npy")
     pathes = [np.array(item) for item in pathes]
+    assert len(pathes) == len(data), "error"
     return data, pathes
 
 
@@ -99,49 +113,94 @@ all_files = get_all_filename()
 background1, cropped_flare_stars = crop_data(flare_stars)
 background2, cropped_microlensings = crop_data(microlensings)
 background_all = background1 + background2
-background = background1[30000:40000] + background2[:6500]
+background = []
+for i in range(0, len(background_all), 10):
+    array = np.array(background_all[i:i+10])
+    array = array - np.mean(array)
+    min_ = np.min(array)
+    max_ = np.max(array)
+    if min_ < -0.05 or max_ > 0.05:
+        pass
+    else:
+        array = array.tolist()
+        background += array
 flare_stars_ = cropped_flare_stars + data_downsampling(cropped_flare_stars)
 microlensings_ = cropped_microlensings + data_downsampling(cropped_microlensings)
 
 
+def average(x):
+    width = x.shape[0]
+    x_move1 = x.reshape([width, 1])
+    ones_5 = np.ones((5,)) / 5
+    ones_10 = np.ones((10,)) / 10
+    ones_20 = np.ones((20,)) / 20
+    x_move5 = np.convolve(x, ones_5, mode="same").astype(np.float32).reshape([width, 1])
+    x_move10 = np.convolve(x, ones_10, mode="same").astype(np.float32).reshape([width, 1])
+    x_move20 = np.convolve(x, ones_20, mode="same").astype(np.float32).reshape([width, 1])
+    x_output = np.stack([x_move1, x_move5, x_move10, x_move20], axis=-1)
+    del x_move1, x_move5, x_move10, x_move20
+    return x_output
+
+
 def data_augmentation(data):
-    start = random.randint(0, len(background) - 400)
-    data_ = []
+    start = random.randint(0, len(background) - 400) # 在背景中随机产生一个起点
+    data_output = []
     for item in data:
-        length = 400 - len(item)
-        rand = random.randint(0, length)
-        rand2 = random.uniform(0.9, 1.1)
+        length = 400 - len(item) # 截取的背景的长度
+        rand = random.randint(0, length) # 左侧和右侧至少为20
+        rand2 = random.uniform(0.8, 1.2)
         left_part = np.array(background[start:start + rand]) * rand2
         left_part = left_part.tolist()
         right_part = np.array(background[start + rand:start + length]) * rand2
         right_part = right_part.tolist()
         item = np.array(item) * random.uniform(0.75, 1.25)
-        item = item.tolist()
-        item_ = []
-        item_.extend(left_part)
-        item_.extend(item)
-        item_.extend(right_part)
-        data_.append(item_)
-    return data_
+        item = [_+random.uniform(-0.05, +0.05) for _ in item]
+        array = []
+        array.extend(left_part)
+        array.extend(item)
+        array.extend(right_part)
+        array = np.array(array).reshape([400, 1, 1])
+        data_output.append(array)
+    return data_output
 
 
-def generate_class0(num=108000):
+def generate_flare_stars(num=104000): #TODO
+    flare_stars = []
+    for i in tqdm(range(num//24)):
+        flare_stars += data_augmentation(flare_stars_)
+    return flare_stars
+
+
+def generate_microlensings(num=104000): #TODO
+    microlensings = []
+    microlensing_template = (pd.read_table("../dataset/microlensing.txt", header=None)[0] + 1) / 5
+    microlensing_template = [item + random.uniform(-0.05, +0.05) for item in microlensing_template]
+    for i in tqdm(range(num//24)):
+        microlensings += data_augmentation(microlensings_) + \
+                         data_augmentation(microlensings_) + \
+                         data_augmentation([microlensing_template]*(24-14))
+    return microlensings
+
+
+def generate_class0(num=114000):
     class0 = []
-    for i in tqdm(range(num//54)):
-        flare_stars_aug = data_augmentation(flare_stars_)
-        microlensings_aug = data_augmentation(microlensings_) + data_augmentation(microlensings_) + data_augmentation(microlensings_)
+    microlensing_template = (pd.read_table("../dataset/microlensing.txt", header=None)[0] + 1) / 5
+    microlensing_template = [item + random.uniform(-0.05, +0.05) for item in microlensing_template]
+    for i in tqdm(range(num//38)):
+        flare_stars_aug = data_augmentation(flare_stars_) # 24
+        microlensings_aug = data_augmentation(microlensings_) + data_augmentation([microlensing_template]*(7)) # 7*2
         class0.extend(flare_stars_aug + microlensings_aug)
     class0 = [np.array(item) for item in class0]
     return class0
 
 
-def generate_class1(all_data, num=108000):
+def generate_class1(all_data, num=114000):
     def crop_data(y):
         length = len(y)
         data = []
         for i in range(10):
             rand = random.randint(0, length-400)
-            data.append(y[rand:rand+400])
+            data.append(y[rand:rand+400,:,:])
         return data
     files = random.sample(all_data, num//10)
     class1 = []
@@ -152,6 +211,13 @@ def generate_class1(all_data, num=108000):
 
 
 if __name__ == '__main__':
-    class0 = generate_class0()
-    class1 = generate_class1()
-    print(class0.shape, class1.shape)
+    data, pathes = load_all_data()
+    print(len(data), len(pathes))
+    count = 0
+    for index, item in enumerate(data):
+
+        if item.shape[0] == 0:
+            print(item.shape, pathes[index])
+            count += 1
+    print(count)
+

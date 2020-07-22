@@ -5,7 +5,7 @@ from operator import mul
 
 class Model(object):
     def __init__(self):
-        self.input = tf.placeholder(tf.float32, [None, 400, 1, 4], name='input')
+        self.input = tf.placeholder(tf.float32, [None, 400, 1, 1], name='input')
 
         with tf.name_scope("label"):
             self.label = tf.placeholder(tf.int32, [None], name='label')
@@ -18,10 +18,6 @@ class Model(object):
 
         self.loss = self.get_loss(self.output, self.one_hot)
 
-        self.batch_size = 10800
-        self.amount = 10800
-        self.step_per_epoch = self.amount // self.batch_size
-
         with tf.name_scope('correct_prediction'):
             correct_prediction = tf.equal(tf.argmax(self.output, 1), tf.argmax(self.one_hot, 1))
         with tf.name_scope('accuracy'):
@@ -30,7 +26,9 @@ class Model(object):
 
         update_ops = tf.get_collection(tf.GraphKeys.UPDATE_OPS)
         with tf.control_dependencies(update_ops):
-            self.optimizer = tf.train.AdamOptimizer(1E-3).minimize(self.loss, global_step=self.global_step)
+            learning_rate = tf.train.exponential_decay(1E-3, global_step=self.global_step, decay_steps=200, decay_rate=0.95)
+
+            self.optimizer = tf.train.AdamOptimizer(learning_rate).minimize(self.loss, global_step=self.global_step)
 
         self.merged = tf.summary.merge_all()
 
@@ -63,7 +61,7 @@ class Model(object):
 
     def network(self, x):
 
-        x = self.conv2d(x, 4, 8, 7, 2)
+        x = self.conv2d(x, 1, 8, 7, 2)
         x = tf.layers.batch_normalization(x, axis=3, training=self.training, momentum=0.95)
         x = tf.nn.relu(x)
         print(x)

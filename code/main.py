@@ -15,8 +15,7 @@ def crop_all_data(data, pathes):
     new_pathes = []
     index = 0
     for array in tqdm(data):
-        array_ = [array[i:i+400] for i in range(0, len(array), 100)][:-4]
-        array_ = [average(item) for item in array_] # input:(400,) output:(400,1,4)
+        array_ = [array[i:i+400,:,:] for i in range(0, len(array), 100)][:-4]
         path = [pathes[index]] * len(array_)
         cropped_data += array_
         new_pathes += path
@@ -58,8 +57,8 @@ def average(x):
 def generate_data_v1(all_data, num):
     class0 = generate_class0(num=num)
     class1 = generate_class1(all_data, num=num)
-    class0 = [[average(item), 0] for item in class0]
-    class1 = [[average(item), 1] for item in class1]
+    class0 = [[item, 0] for item in class0]
+    class1 = [[item, 1] for item in class1]
     train_data = class0 + class1
     np.random.shuffle(train_data)
     x = [item[0] for item in train_data]
@@ -68,13 +67,12 @@ def generate_data_v1(all_data, num):
 
 
 def generate_data_v2(all_data, collections, num):
-    class0 = generate_class0(num=num)
+    class0 = generate_class0(num=num) # [None, 400, 1 , 4]
     class1 = generate_class1(all_data, num=num)
-    class0 = [[average(item), 0] for item in class0]
-    class1 = [[average(item), 1] for item in class1]
-    collections = [[item, 1] for item in collections[:num//2]]
+    collections = collections[-num//4:]
     class1 = class1[0:num-len(collections)] + collections
-
+    class0 = [[item, 0] for item in class0]
+    class1 = [[item, 1] for item in class1]
     train_data = class0 + class1
     np.random.shuffle(train_data)
     x = [item[0] for item in train_data]
@@ -91,16 +89,23 @@ if __name__ == '__main__':
     data, pathes = load_all_data()  # 载入全部数据
 
     sess, writer, saver = load_model(dirId)  # 加载模型权重
-    x, y = generate_data_v1(data, num=21600)
+    x, y = generate_data_v1(data, num=23250)
     cropped_data, new_pathes = crop_all_data(data, pathes)  # 将数据按长度400进行切分
 
     if mode == 'train':
         i = 0
+        # old_data_collection, old_path_collecton = [], []
         while True:
             f = open("./models/" + dirId + "/logs/record.txt", "a+")
-            train(x, y, sess, model, saver, writer, dirId, train_step=200)
-            data_collection, path_collection = test(cropped_data, new_pathes, sess, model, num=21600 * 2)
-            x, y = generate_data_v2(data, data_collection, num=21600)
+            if i == 0:
+                train(x, y, sess, model, saver, writer, dirId, train_step=200)
+            else:
+                train(x, y, sess, model, saver, writer, dirId, train_step=50)
+            data_collection, path_collection = test(cropped_data, new_pathes, sess, model, num=22800 * 2)
+            # old_data_collection += data_collection
+            # old_data_collection = old_data_collection[-23250:]
+            # x, y = generate_data_v2(data, old_data_collection, num=23250)
+            x, y = generate_data_v1(data, num=22800)
             f.write("%d - number of hard samples: %d\n" % (i, len(data_collection)))
             f.write("%d - percent of hard samples: %.2f%%\n" % (i, len(data_collection) / len(cropped_data) * 100))
             f.close()
@@ -110,7 +115,7 @@ if __name__ == '__main__':
             print("%d - percent of hard samples: %.2f%%" % (i, len(data_collection) / len(cropped_data) * 100))
             i += 1
     elif mode == 'test':
-        data_collection, path_collection = test(cropped_data, new_pathes, sess, model, num=21600 * 2)
+        data_collection, path_collection = test(cropped_data, new_pathes, sess, model, num=22800 * 2)
         print("number of hard samples: %d" % (len(data_collection)))
         print("percent of hard samples: %.2f%%" % (len(data_collection) / len(cropped_data) * 100))
         np.save("./models/"+dirId+"/output-data.npy", np.array(data_collection))
